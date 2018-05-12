@@ -1,6 +1,5 @@
 # Simple apache maven&ant packet manager.
 # Script was written by Tymur Kvaratskheliia. Email: tymur_kvaratskheliia@epam.com
-set -xe
 
 # Pre-installations
 
@@ -62,6 +61,14 @@ Example ./manager install Maven"
       exit 0
     fi
 
+        
+    # check http response code
+    resp=`wget --spider "http://www-us.apache.org/dist/maven/maven-$global_version/$2/binaries/apache-maven-$2.bin.tar.gz" 2>&1 | grep ".*HTTP.*"`
+    if [[ $resp =~ .*404.* ]]
+    then
+      echo "$ant_maven $2 version not found. Use \"list $ant_maven\" argument to see available versions from official apache storage"
+      exit 0
+    fi
     # download maven from official source
     wget "http://www-us.apache.org/dist/maven/maven-$global_version/$2/binaries/apache-maven-$2-bin.tar.gz"
     # unzip maven
@@ -69,14 +76,21 @@ Example ./manager install Maven"
     # rm maven tar.gz
     rm -f apache-$ant_maven-$2-bin.tar.gz
     # set maven home and add in path
-    export M2_HOME=$location/maven
+    export M2_HOME=$location/$ant_maven
     export PATH=${M2_HOME}/bin:$PATH
     # Set alternatives
     alternatives --insatall $location/$ant_maven $ant_maven $location/apache-$ant_maven-$2/ 1
 
   else
     
-    ant_maven="ant"  
+    ant_maven="ant" 
+    # check http response
+    resp=`wget --spider "http://archive.apache.org/dist/ant/binaries/apache-ant-$2-bin.tar.gz" 2>&1 | grep ".*HTTP.*"`
+    if [[ $resp =~ .*404.* ]]
+    then
+      echo "$ant_maven $2 version not found. Use \"list $ant_maven\" argument to see available versions from official apache storage"
+      exit 0
+    fi
     # download ant
     wget "http://archive.apache.org/dist/ant/binaries/apache-ant-$2-bin.tar.gz"
     # unzip ant      
@@ -84,7 +98,7 @@ Example ./manager install Maven"
     # rm ant tar.gz
     rm -f apache-$ant_maven-$2-bin.tar.gz
     # set home
-    export ANT_HOME=$location/ant
+    export ANT_HOME=$location/$ant_maven
     export PATH=${ANT_HOME}/bin:${PATH}
     # set alternative
     alternatives --install $location/$ant_maven $ant_maven $location/apache-$ant_maven-$2/ 1
@@ -109,13 +123,10 @@ Example ./manager remove Ant"
       exit 0
   fi
   
-  if [[ $2 != '' ]]
-  then
-    ant_maven="$ant_maven $2"
-  fi
   # Main part
   echo "Start removing $ant_maven-$2"
   rm -rf $location/apche-$ant_maven-$2
+  alternatives --remove $ant_maven $location/apache-$ant_maven-$2/
   echo "$ant_maven-$2 successfully removed"
 
 }
@@ -125,6 +136,16 @@ function use {
  
   ant_maven="$1"
 
+  if [[ $ant_maven == "Maven" ]] || [[ $ant_maven == "maven" ]]
+  then
+    ant_maven="maven"
+  elif [[ $ant_maven == "Ant" ]] || [[ $ant_maven == "Ant" ]]
+  then
+    ant_maven="ant"
+  else
+    echo "Sorry, but this script can manage only Maven and Ant packages."
+  fi
+
   # execute install function with use's parameters
   if [[ `ls $location | grep "apache-$ant_maven-$2"` == '' ]]
   then
@@ -132,8 +153,11 @@ function use {
     install "$1" "$2" 
   fi
   # Setting alternatives 
-  alternatives --install $location/maven maven $location/apache-$ant_maven-$2/ 1
+  alternatives --install $location/$ant_maven $ant_maven $location/apache-$ant_maven-$2/ 1
+  alt_number=`echo "" | alternatives --config maven | grep -Po "(?<=.)[0-9](?=.*-$2/)"`
+  echo "$alt_number" | alternatives --config $ant_maven 
   #alternatives --config maven
+  echo "$ant_maven-$2 was set as main. Yor cant check current version using $ant_maven -version command. "
   
 }
 
@@ -142,15 +166,20 @@ function list {
   
   if [[ $1 == "Ant" ]] || [[ $1 == "ant" ]]
   then
+    ant_maven="ant"
+    # Get installed ant versions
+    installed=`ls $location | grep -Po "(?<=.-$ant_maven-).*"`
+    echo $installed
     # Get list of available ant versions
-    list_ant=`curl -X GET https://archive.apache.org/dist/ant/binaries/ | grep -Po "apache-ant-.*(?=-bin.tar.gz\")"`
-    cd $location
-    echo $list_ant | xargs ls
+    list_ant=`curl -s GET https://archive.apache.org/dist/ant/binaries/ | grep -Po "apache-ant-.*(?=-bin.tar.gz\")"`
+    echo $list_ant | sed "s/ /\n/g" | sed "/.*-$installed/s/$/ (installed)/"
   elif [[ $1 == "Maven" ]] || [[ $1 == "maven" ]]
   then
+    # Get installed maven versioins
+    installed=""
     # Get list fo available maven vesions
-    list_maven=`curl -X GET https://www-eu.apache.org/dist/maven/binaries/ | grep -Po "apache-maven.*(?=-bin.tar.gz\")"`
-    echo $list_maven
+    list_maven=`curl -s GET https://www-eu.apache.org/dist/maven/binaries/ | grep -Po "apache-maven.*(?=-bin.tar.gz\")"`
+    echo $list_maven | sed "s/ /\n/g" | sed "/.*-$installed/s/$ (installed)"
   else
     echo "Sory, but this script works only with Ant or Maven"
     exit 0
@@ -173,7 +202,7 @@ case "$1" in
     use "$2" "$3"                    # starting use function
     ;;
   "list")
-    echo "You choosed list"
+    echo "List of available $2 packages in official storage https://archive.apache.org/ "
     list "$2"                        # starting list function
     ;;
   "help")
