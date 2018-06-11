@@ -1,8 +1,8 @@
 # Simple apache maven&ant packet manager.
 # Script was written by Tymur Kvaratskheliia. Email: tymur_kvaratskheliia@epam.com
 
+echo $USER
 # Pre-installations
-
 if [[ `which java` = *"no java in"* ]]
 then
   echo "Installing java 1.8.0..."
@@ -63,23 +63,25 @@ Example ./manager install Maven"
 
         
     # check http response code
-    resp=`wget --spider "http://www-us.apache.org/dist/maven/maven-$global_version/$2/binaries/apache-maven-$2.bin.tar.gz" 2>&1 | grep ".*HTTP.*"`
+    resp=`wget --spider "http://www-us.apache.org/dist/maven/binaries/apache-maven-$2-bin.tar.gz" 2>&1 | grep ".*HTTP.*"`
     if [[ $resp =~ .*404.* ]]
     then
       echo "$ant_maven $2 version not found. Use \"list $ant_maven\" argument to see available versions from official apache storage"
       exit 0
     fi
     # download maven from official source
-    wget "http://www-us.apache.org/dist/maven/maven-$global_version/$2/binaries/apache-maven-$2-bin.tar.gz"
+    wget "http://www-us.apache.org/dist/maven/binaries/apache-maven-$2-bin.tar.gz"
     # unzip maven
     tar -xzf apache-$ant_maven-$2-bin.tar.gz
     # rm maven tar.gz
     rm -f apache-$ant_maven-$2-bin.tar.gz
     # set maven home and add in path
-    export M2_HOME=$location/$ant_maven
-    export PATH=${M2_HOME}/bin:$PATH
+    echo "M2_HOME=$location/$ant_maven
+export M2_HOME
+PATH=\$M2_HOME/bin:\$PATH
+export PATH" >> /home/vagrant/.bashrc
     # Set alternatives
-    alternatives --insatall $location/$ant_maven $ant_maven $location/apache-$ant_maven-$2/ 1
+    alternatives --install $location/$ant_maven $ant_maven $location/apache-$ant_maven-$2/ 1
 
   else
     
@@ -98,8 +100,10 @@ Example ./manager install Maven"
     # rm ant tar.gz
     rm -f apache-$ant_maven-$2-bin.tar.gz
     # set home
-    export ANT_HOME=$location/$ant_maven
-    export PATH=${ANT_HOME}/bin:${PATH}
+    echo "ANT_HOME=$location/$ant_maven
+export ANT_HOME
+PATH=\$ANT_HOME/bin:\${PATH}
+export PATH" >> /home/vagrant/.bashrc
     # set alternative
     alternatives --install $location/$ant_maven $ant_maven $location/apache-$ant_maven-$2/ 1
 
@@ -125,7 +129,7 @@ Example ./manager remove Ant"
   
   # Main part
   echo "Start removing $ant_maven-$2"
-  rm -rf $location/apche-$ant_maven-$2
+  rm -rf $location/apache-$ant_maven-$2
   alternatives --remove $ant_maven $location/apache-$ant_maven-$2/
   echo "$ant_maven-$2 successfully removed"
 
@@ -172,14 +176,14 @@ function list {
     echo $installed
     # Get list of available ant versions
     list_ant=`curl -s GET https://archive.apache.org/dist/ant/binaries/ | grep -Po "apache-ant-.*(?=-bin.tar.gz\")"`
-    echo $list_ant | sed "s/ /\n/g" | sed "/.*-$installed/s/$/ (installed)/"
+    echo $list_ant | sed "s/ /\n/g" | sed "/.*-$installed/s/$/ /"
   elif [[ $1 == "Maven" ]] || [[ $1 == "maven" ]]
   then
     # Get installed maven versioins
     installed=""
     # Get list fo available maven vesions
-    list_maven=`curl -s GET https://www-eu.apache.org/dist/maven/binaries/ | grep -Po "apache-maven.*(?=-bin.tar.gz\")"`
-    echo $list_maven | sed "s/ /\n/g" | sed "/.*-$installed/s/$ (installed)"
+    list_maven=`curl -s GET https://www-us.apache.org/dist/maven/binaries/ | grep -Po "apache-maven.*(?=-bin.tar.gz\")"`
+    echo $list_maven | sed "s/ /\n/g"
   else
     echo "Sory, but this script works only with Ant or Maven"
     exit 0
@@ -209,6 +213,7 @@ case "$1" in
     echo -e "This script easily can download and install Apache Maven or Ant packages.\n
     There are list of arguments you can use:\n
     	install - install specify Maven or Ant version
+        list - shows you list of available versions of Maven or ant
     	remove - remove chosed Maven or Ant version
         use - you can chose what version do you want to use now ( only CentOS 7+ )
     	help - user manual\n
